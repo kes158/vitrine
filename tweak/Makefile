@@ -56,7 +56,9 @@ spotifyglass_LIBRARIES += resolv
 spotifyglass.all.tweak.variables: sg-wireguard
 .PHONY: sg-wireguard
 sg-wireguard:
-	@../WireGuard/build-ios.sh
+	@if [ "$${SG_WG_PREBUILT:-0}" = 1 ] && [ -s ../WireGuard/build/libsgwg.a ] && [ -s ../WireGuard/build/libsgwg.h ]; then \
+		echo "==> reusing cached WireGuard library"; \
+	else ../WireGuard/build-ios.sh; fi
 
 after-stage::
 	@mkdir -p "$(THEOS_STAGING_DIR)$(THEOS_PACKAGE_INSTALL_PREFIX)/Library/Application Support/Vitrine.bundle"

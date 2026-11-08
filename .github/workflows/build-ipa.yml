@@ -51,6 +51,7 @@ jobs:
 
       # Reject bad links before spending time on the Apple toolchain.
       - uses: ./.github/actions/setup-theos
+        id: theos
 
       - name: Install cyan
         run: python3 -m pip install --break-system-packages git+https://github.com/asdfzxcvbn/pyzule-rw.git
@@ -67,8 +68,25 @@ jobs:
           path: out/extension
           key: extension-${{ steps.spotify.outputs.version }}-${{ hashFiles('extension/LiveActivity/**', 'tweak/Sources/Shared/LiveActivity/**', 'scripts/build-extension.sh') }}
 
+      # The tweak package depends on these exact sources, generated flags, build options,
+      # Theos and Xcode. Reuse it only for an exact key match.
+      - uses: actions/cache@v5
+        id: tweak_cache
+        with:
+          path: tweak/packages
+          key: tweak-release-${{ runner.os }}-${{ runner.arch }}-${{ steps.theos.outputs.xcode_build }}-${{ steps.theos.outputs.theos_commit }}-wg${{ inputs.enable_wireguard }}-${{ steps.spotify.outputs.version }}-${{ hashFiles('tweak/Sources/**', 'tweak/layout/**', 'tweak/Makefile', 'tweak/control', 'tweak/spotifyglass.plist', 'vendor/audio/**', 'WireGuard/**/*.go', 'WireGuard/go.mod', 'WireGuard/go.sum', 'WireGuard/build-ios.sh', 'WireGuard/THIRD_PARTY_LICENSES.txt', 'version.txt', 'CHANGELOG.md', 'scripts/whats-new.sh', 'scripts/check-layers.sh') }}
+
+      - uses: actions/cache@v5
+        id: wireguard_cache
+        if: inputs.enable_wireguard && steps.tweak_cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            WireGuard/build/libsgwg.a
+            WireGuard/build/libsgwg.h
+          key: wireguard-ios-${{ runner.os }}-${{ runner.arch }}-${{ steps.theos.outputs.xcode_build }}-${{ hashFiles('WireGuard/**/*.go', 'WireGuard/go.mod', 'WireGuard/go.sum', 'WireGuard/build-ios.sh') }}
+
       - uses: actions/setup-go@v6
-        if: inputs.enable_wireguard
+        if: inputs.enable_wireguard && steps.tweak_cache.outputs.cache-hit != 'true' && steps.wireguard_cache.outputs.cache-hit != 'true'
         with:
           go-version-file: WireGuard/go.mod
           cache-dependency-path: WireGuard/go.sum
@@ -76,6 +94,8 @@ jobs:
       - run: make release
         env:
           WIREGUARD: ${{ inputs.enable_wireguard && '1' || '0' }}
+          SG_REUSE_TWEAK_DEB: ${{ steps.tweak_cache.outputs.cache-hit == 'true' && '1' || '0' }}
+          SG_WG_PREBUILT: ${{ steps.wireguard_cache.outputs.cache-hit == 'true' && '1' || '0' }}
 
       - run: ccache --show-stats
 

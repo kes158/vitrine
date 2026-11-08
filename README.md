@@ -64,6 +64,11 @@ An expired link or download-limit page can return HTTP 200 too. The workflow val
 the ZIP contents, Spotify bundle identifier and executable before installing build tools;
 a MIME label alone does not determine whether a file is an IPA.
 
+Repeated Actions builds of the same Spotify version and source revision reuse the generated flag
+table, Live Activity extension, and compiled tweak package. WireGuard builds also reuse its Go
+library when the Go sources and Xcode version match. The IPA still downloads and is repackaged
+each run, so a newly supplied IPA is always validated.
+
 ### Release workflow setup
 
 The **Release** workflow has two independent prerequisites in a fork:

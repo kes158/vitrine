@@ -6,6 +6,13 @@ inputs:
   brew:
     description: Extra Homebrew formulae to install
     default: ""
+outputs:
+  theos_commit:
+    description: The checked-out Theos revision
+    value: ${{ steps.keys.outputs.theos }}
+  xcode_build:
+    description: The selected Xcode build number
+    value: ${{ steps.keys.outputs.xcode }}
 runs:
   using: composite
   steps:
