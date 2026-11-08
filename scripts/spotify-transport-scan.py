@@ -11,7 +11,16 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-BASELINE_UUID = "fbce22c17e1b3e0d9be866ff9291943e"
+INSPECTED_UUIDS = {
+    "9.1.90": {
+        "Spotify": "fbce22c17e1b3e0d9be866ff9291943e",
+        "Frameworks/SpotifyShared.framework/SpotifyShared": "2e074234cfc63f0e9255c9881824167a",
+    },
+    "9.1.94": {
+        "Spotify": "1dfddfa139c03735b9a5fdfa475f4700",
+        "Frameworks/SpotifyShared.framework/SpotifyShared": "2c12ca8c48ad33f8af6569c084a6324f",
+    },
+}
 REQUIRED = {
     "Spotify": ["SPTCoreURLSessionDataDelegate", "_TtC26Connectivity_HttpClientKit20HttpClientURLSession"],
     "Frameworks/SpotifyShared.framework/SpotifyShared": ["SPTDataLoaderService"],
@@ -40,7 +49,17 @@ def macho(data):
     return {"uuid": uuid, "cryptid": encryption}
 
 
-def scan(path, require_version=None):
+def wireguard_version(version):
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version or "")
+    if not match:
+        raise ValueError(f"Unrecognized Spotify version: {version}")
+    parts = tuple(map(int, match.groups()))
+    if parts != (9, 1, 90) and parts < (9, 1, 94):
+        raise ValueError("WireGuard requires Spotify 9.1.90 or 9.1.94 and newer")
+    return "inspected IPA" if version in INSPECTED_UUIDS else "future version: static transport check only"
+
+
+def scan(path, require_version=None, wireguard_compatible=False):
     with zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory(prefix="spotify-transport-") as temp:
         info = plistlib.loads(archive.read("Payload/Spotify.app/Info.plist"))
         if info.get("CFBundleIdentifier") != "com.spotify.client":
@@ -49,11 +68,16 @@ def scan(path, require_version=None):
         if require_version and version != require_version:
             raise ValueError(f"Expected Spotify {require_version}; got {version}")
         result = {"version": version, "build": info.get("CFBundleVersion"), "images": {}}
+        if wireguard_compatible:
+            result["wireguard_compatibility"] = wireguard_version(version)
         for name, classes in REQUIRED.items():
             data = archive.read("Payload/Spotify.app/" + name)
             record = macho(data)
-            if require_version == "9.1.90" and name == "Spotify" and record["uuid"] != BASELINE_UUID:
-                raise ValueError("This 9.1.90 executable differs from the inspected baseline; re-verify it first")
+            expected = INSPECTED_UUIDS.get(version, {}).get(name)
+            if (wireguard_compatible or require_version) and expected and record["uuid"] != expected:
+                raise ValueError(f"Spotify {version} {name} differs from the inspected IPA; re-verify it first")
+            if (wireguard_compatible and not record["uuid"]):
+                raise ValueError(f"Spotify {version} {name} has no Mach-O UUID")
             binary = Path(temp) / Path(name).name
             binary.write_bytes(data)
             output = subprocess.run(["xcrun", "dyld_info", "-objc", str(binary)], check=True, capture_output=True, text=True).stdout
@@ -71,10 +95,10 @@ def scan(path, require_version=None):
                     symbol: bool(re.search(r"\s_" + re.escape(symbol) + r"\s+\(from ", imported))
                     for symbol in NATIVE_IMPORTS
                 }
-                if require_version == "9.1.90" and not all(record["native_imports"].values()):
-                    raise ValueError("Required native transport import missing from inspected Spotify 9.1.90")
+                if (wireguard_compatible or require_version) and not all(record["native_imports"].values()):
+                    raise ValueError(f"Required native transport import missing from Spotify {version}")
             result["images"][name] = record
-        result["evidence"] = "Static class/selector/import presence only; runtime ABI and device playback must also be checked."
+        result["evidence"] = "Static class/selector/import presence only; runtime ABI, all Vitrine features and device playback must also be checked."
         return result
 
 
@@ -82,10 +106,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("ipa", type=Path)
     parser.add_argument("--require-version")
+    parser.add_argument("--wireguard-compatible", action="store_true")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
     try:
-        result = scan(args.ipa, args.require_version)
+        result = scan(args.ipa, args.require_version, args.wireguard_compatible)
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
         parser.exit(1, f"Spotify transport preflight failed: {error}\n")
     text = json.dumps(result, indent=2) + "\n"

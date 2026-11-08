@@ -1,11 +1,11 @@
-# 앱 내부 WireGuard / 프록시 — Spotify 9.1.90
+# 앱 내부 WireGuard / 프록시 — Spotify 9.1.90, 9.1.94 및 이후 버전 후보
 
 `WIREGUARD=1`로 빌드하면 두 UI의 Mod Settings에 **앱 내부 WireGuard·프록시**가 생깁니다.
 기본 빌드에는 엔진·설정 화면·훅이 들어가지 않습니다. 사용은 기본적으로 꺼져 있고 **iOS 17 이상**에서 켤 수 있습니다.
 
 ## 적용 범위
 
-Spotify의 `NSURLSession` 설정과 세션 생성에 프록시를 적용합니다. 9.1.90 메인 실행파일의
+Spotify의 `NSURLSession` 설정과 세션 생성에 프록시를 적용합니다. 9.1.90·9.1.94 메인 실행파일에서 확인한
 `nw_connection_create`, `getaddrinfo`, `connect`, `sendto`, `sendmsg` import도 실행파일 범위에서 교체합니다.
 `Network.framework` TCP에는 전용 privacy context의 프록시를 설정하고, BSD TCP의 이름 조회는 터널 DNS,
 연결은 로컬 인증 SOCKS5를 거칩니다. Go 엔진과 시스템 프레임워크의 소켓은 교체하지 않습니다.
@@ -41,23 +41,26 @@ Spotify의 아래 클래스는 응답·오류·수신 바이트를 관측합니�
 | Spotify | _TtC26Connectivity_HttpClientKit20HttpClientURLSession | 위와 같음 |
 | SpotifyShared | SPTDataLoaderService | 위와 같음 |
 
-기준 IPA: Spotify **9.1.90 / 919002269**, arm64, iOS 최소 16.1.
-메인 UUID: `fbce22c17e1b3e0d9be866ff9291943e`.
-SpotifyShared UUID: `2e074234cfc63f0e9255c9881824167a`. 두 실행파일의 `cryptid=0` 확인.
-정적 클래스 존재는 실제 재생 성공의 증거가 아닙니다.
+확인한 복호화 IPA는 Spotify **9.1.90 / 919002269**와 **9.1.94 / 919401928**입니다.
+메인·SpotifyShared UUID는 9.1.90에서 각각 `fbce22c17e1b3e0d9be866ff9291943e`,
+`2e074234cfc63f0e9255c9881824167a`, 9.1.94에서 각각 `1dfddfa139c03735b9a5fdfa475f4700`,
+`2c12ca8c48ad33f8af6569c084a6324f`입니다. 네 바이너리의 `cryptid=0`과 필요한 클래스·메서드·import를 확인했습니다.
+정적 구조와 빌드 성공은 실제 재생 성공의 증거가 아닙니다. 9.1.94의 실기기 재생도 아직 확인하지 않았습니다.
 
 ## 빌드
 
 Go 버전은 `WireGuard/go.mod`에 고정되어 있습니다. Xcode, Theos 및 기존 vitrine 빌드 도구가 필요합니다.
 
 ```sh
-make release IPA=/path/to/Spotify-9.1.90.ipa WIREGUARD=1
+make release IPA=/path/to/Spotify-9.1.94.ipa WIREGUARD=1
 ```
 
 GitHub Actions의 **Build IPA from your own Spotify IPA**에서 이 브랜치를 선택하고
-**enable_wireguard**를 켜도 됩니다. 파이프라인은 입력 IPA의 버전·UUID·암호화·클래스/선택자를
+**enable_wireguard**를 켜도 됩니다. 파이프라인은 입력 IPA의 버전·UUID·암호화·클래스/선택자·native import를
 `scripts/spotify-transport-scan.py`로 확인한 다음 기존 플래그 추출과 빌드를 진행합니다.
-검증되지 않은 다른 IPA는 입력 검사에서 중단됩니다. 완성된 IPA는 사용자의 인증서로 재서명해야 합니다.
+9.1.90과 9.1.94는 확인한 UUID와 비교합니다. 이후 버전은 필요한 구조가 남아 있을 때만
+**미검증 후보**로 빌드하며, 구조가 바뀌면 중단합니다. 향후 버전의 실행·재생 호환성은 자동으로 보장되지 않습니다.
+완성된 IPA는 사용자의 인증서로 재서명해야 합니다.
 
 트윅만 빌드할 때는 먼저 실제 IPA로 `make flags IPA=...`를 실행합니다.
 
@@ -65,8 +68,9 @@ GitHub Actions의 **Build IPA from your own Spotify IPA**에서 이 브랜치를
 THEOS=/path/to/theos gmake -C tweak package WIREGUARD=1
 ```
 
-`PIXIE=1`은 기존의 독립적인 선택 옵션입니다. 이 변경은 Pixie의 패치 오프셋·검증 조건을 바꾸지 않습니다.
-기준 9.1.90 UUID는 Pixie 조건과 일치하지만, 두 기능을 함께 쓰는 실제 다운로드는 별도 실기기 확인이 필요합니다.
+`PIXIE=1`은 기존의 독립적인 선택 옵션이며 **9.1.90 전용**입니다. 9.1.94 이상에서 함께 켜면
+Pixie의 별도 입력 검사에서 중단됩니다. 이 변경은 Pixie의 패치 오프셋·검증 조건을 바꾸지 않습니다.
+Vitrine의 일반 화면·기능은 9.1.94 실기기에서 아직 검증되지 않아 설치 경고가 표시됩니다.
 
 ## 사용
 
@@ -101,7 +105,7 @@ python3 scripts/check-strings.py
   테스트 피어로의 네이티브 `getaddrinfo`·`connect`·`nw_connection_create` TCP 연결,
   죽은 피어·잘못된 설정·잘못된 비밀번호·신뢰할 수 없는 인증서 처리. Spotify delegate fixture의 전달과 ABI 검사.
 - UIKit fixture: 실제 설정 화면/번역과 가짜 엔진 상태로 연결 종류 전환·비밀번호 보안 입력·다크 스타일 확인.
-- iOS arm64: 실제 9.1.90에서 추출한 플래그 테이블로 전체 트윅 빌드.
+- iOS arm64: 각 IPA에서 추출한 플래그 테이블로 전체 트윅 및 IPA 빌드.
 
 **아직 실기기에서 입증하지 않은 항목:** 실제 Spotify 서버에서의 재생/로그인/다운로드,
 Wi-Fi↔셀룰러 전환, 잠금 화면 장시간 재생, 다른 네트워크 경로의 우회 여부, 실제 WireGuard 제공자.

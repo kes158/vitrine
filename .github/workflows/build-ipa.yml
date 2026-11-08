@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       enable_wireguard:
-        description: "App-local WireGuard / proxy (verified Spotify 9.1.90 input, iOS 17+)"
+        description: "App-local WireGuard / proxy (Spotify 9.1.90, 9.1.94+; future versions checked at build, iOS 17+)"
         type: boolean
         default: false
       upload_method:

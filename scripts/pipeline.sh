@@ -55,7 +55,7 @@ if [ "$PIXIE" = 1 ]; then
   python3 -B "$ROOT/NativeDownloads/tools/build_vitrine_9190.py" "$IN" --check-input ${OUT:+--output "$OUT"}
 fi
 if [ "${WIREGUARD:-0}" = 1 ]; then
-  python3 "$ROOT/scripts/spotify-transport-scan.py" "$IN" --require-version 9.1.90
+  python3 "$ROOT/scripts/spotify-transport-scan.py" "$IN" --wireguard-compatible
 fi
 mkdir -p "$ROOT/out"
 

@@ -46,7 +46,8 @@ to Spotify's own screens with everything else the mod adds on top. Both live in 
 
 ## Build it
 
-No IPA is distributed. Bring a decrypted **Spotify 9.1.78**, **9.1.88** or **9.1.90** IPA; you get an unsigned
+No IPA is distributed. Bring a decrypted **Spotify 9.1.78**, **9.1.88** or **9.1.90** IPA, or the
+**9.1.94** IPA whose WireGuard build was checked but whose app behavior is not device-tested; you get an unsigned
 `vitrine-<mod version>.ipa` to sign with SideStore, Feather or any certificate signer. Releases have no `.deb`:
 injected by hand, the tweak alone misses the app changes the redesign needs (its glass tab bar), the Live
 Activity, Music Haptics in the background and Connect's local discovery, so build the IPA instead.
@@ -192,5 +193,7 @@ GPL-3.0. Not affiliated with Spotify.
 
 ### Optional in-app WireGuard / proxy
 
-For the verified Spotify 9.1.90 IPA, build with `WIREGUARD=1` (iOS 17+).
+Build with `WIREGUARD=1` (iOS 17+) using the inspected Spotify 9.1.90 or 9.1.94 decrypted IPA.
+Newer IPAs can pass a structural transport preflight, but remain unverified until tested on a device.
+Pixie remains limited to Spotify 9.1.90. Spotify 9.1.94 is not yet in Vitrine's device-tested version list.
 See [setup, coverage and validation](docs/wireguard.md).

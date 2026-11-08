@@ -1,4 +1,4 @@
-// Spotify 9.1.90 transport observations. No Google flags, enum guesses or binary patches.
+// Spotify transport observations. No Google flags, enum guesses or binary patches.
 // The session core applies the proxy; these delegates measure what Spotify actually receives.
 #import "SGWGCore.h"
 #import <objc/runtime.h>
@@ -103,7 +103,7 @@ NSArray<NSString *> *SGWGTransportReportLines(void) {
         [NSString stringWithFormat:@"spotify.received-bytes: media %llu api %llu", (unsigned long long)mediaBytes, (unsigned long long)apiBytes],
         [NSString stringWithFormat:@"spotify.hooks: %lu installed | skipped: %@", (unsigned long)installed.count, [skipped componentsJoinedByString:@"; "] ?: @"none"],
         @"coverage: URLSession and Spotify main-image native TCP imports; remote UDP is blocked. Background services, remote Connect devices and playback are not device-verified.",
-        @"baseline: Spotify 9.1.90; class/selector existence is static evidence, not proof of playback. Destination counters count connection attempts."
+        [NSString stringWithFormat:@"input: Spotify %@; class/selector presence is static evidence, not proof of playback. Destination counters count connection attempts.", SGWGAppVersion()]
     ];
     os_unfair_lock_unlock(&lock);
     return lines;
