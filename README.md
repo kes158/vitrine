@@ -57,6 +57,36 @@ Fork the repo, enable Actions, run **Build IPA from your own Spotify IPA**. It t
 your decrypted `.ipa` and hands the built IPA back as a workflow artifact. No Mac needed; the link is
 masked in the log and the result stays in your fork.
 
+The URL must return the IPA bytes without login, not a file host's share or preview page.
+An expired link or download-limit page can return HTTP 200 too. The workflow validates
+the ZIP contents, Spotify bundle identifier and executable before installing build tools;
+a MIME label alone does not determine whether a file is an IPA.
+
+### Release workflow setup
+
+The **Release** workflow has two independent prerequisites in a fork:
+
+- In **Settings → Actions → General → Workflow permissions**, enable
+  **Allow GitHub Actions to create and approve pull requests**. The workflow already
+  requests `contents: write` and `pull-requests: write`; those declarations cannot
+  override this repository or organization setting. This fixes release-please's
+  “GitHub Actions is not permitted to create or approve pull requests” error.
+- The tweak compile check needs `SG_FLAG_LIST`, a generated table read from your own
+  decrypted Spotify IPA. On the Mac build environment described below, generate and
+  upload it (authenticate `gh` with access to your fork first):
+
+      make flags IPA=ipa/Spotify-9.1.90.ipa
+      set -o pipefail
+      gzip -9c tweak/Sources/Shared/Flags/SGFlagList.m | base64 | gh secret set SG_FLAG_LIST --repo kes158/vitrine
+
+  Use your own fork's repository name in place of `kes158/vitrine` when applicable.
+  This creates an Actions repository secret; do not commit the generated table or
+  paste it into issue comments. The manual **Build IPA from your own Spotify IPA**
+  workflow extracts its table from the supplied IPA and does not need this secret.
+
+After supplying the prerequisite, rerun the failed job. Missing flag data is an error;
+the compile check never substitutes a dummy table or silently skips compilation.
+
 ### Build on a Mac
 
 Theos in `~/theos` and Xcode with an iPhoneOS 26+ SDK (`xcode-select` it). An SDK in `~/theos/sdks`

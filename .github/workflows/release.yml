@@ -31,16 +31,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: ./.github/actions/setup-theos
-
       # The flag table is read out of Spotify's binary (make flags), so it comes from a secret
       # instead of an IPA: gzip -9c tweak/Sources/Shared/Flags/SGFlagList.m | base64 | gh secret set SG_FLAG_LIST
       - name: Flag table
         env:
           SG_FLAG_LIST: ${{ secrets.SG_FLAG_LIST }}
         run: |
-          [ -n "$SG_FLAG_LIST" ] || { echo "::error::the SG_FLAG_LIST secret is not set"; exit 1; }
+          if [ -z "$SG_FLAG_LIST" ]; then
+            echo "::error::SG_FLAG_LIST is missing. Generate the flag table from your decrypted Spotify IPA with make flags, then upload its gzip/base64 contents as the SG_FLAG_LIST Actions secret. See README.md (Release workflow setup)."
+            exit 1
+          fi
           echo "$SG_FLAG_LIST" | base64 -d | gunzip > tweak/Sources/Shared/Flags/SGFlagList.m
+
+      - uses: ./.github/actions/setup-theos
 
       - name: Build
         run: env -u MAKELEVEL gmake -C tweak clean package

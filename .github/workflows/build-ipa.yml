@@ -28,20 +28,16 @@ jobs:
 
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
-      - uses: ./.github/actions/setup-theos
-        with:
-          brew: aria2
-
-      - name: Install cyan
-        run: python3 -m pip install --break-system-packages git+https://github.com/asdfzxcvbn/pyzule-rw.git
+      - name: Install downloader
+        run: brew install aria2
 
       - name: Download IPA
+        id: spotify
         env:
           IPA_URL: ${{ inputs.ipa_url }}
         run: |
           mkdir -p ipa
-          # Many file hosts throttle each connection and drop long transfers, so fetch in
-          # parallel ranges and resume on failure (one connection when ranges aren't served).
+          # Keep parallel ranges/resume for hosts that throttle large downloads.
           aria2c --console-log-level=error --summary-interval=0 --download-result=hide \
             --max-connection-per-server=8 --split=8 --min-split-size=1M \
             --max-tries=20 --retry-wait=3 --continue=true --allow-overwrite=true \
@@ -50,14 +46,13 @@ jobs:
             rm -f ipa/spotify.ipa ipa/spotify.ipa.aria2
             curl -fsSL --retry 10 --retry-all-errors --retry-delay 3 -C - -o ipa/spotify.ipa "$IPA_URL"
           }
-          case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
+          python3 -B scripts/validate-ipa.py ipa/spotify.ipa --github-output "$GITHUB_OUTPUT"
 
-      - name: Spotify version
-        id: spotify
-        run: |
-          app="$(unzip -Z1 ipa/spotify.ipa | grep -oE '^Payload/[^/]+\.app/' | sort -u | head -1)"
-          unzip -p ipa/spotify.ipa "${app}Info.plist" > "$RUNNER_TEMP/Info.plist"
-          echo "version=$(plutil -extract CFBundleShortVersionString raw -o - "$RUNNER_TEMP/Info.plist")" >> "$GITHUB_OUTPUT"
+      # Reject bad links before spending time on the Apple toolchain.
+      - uses: ./.github/actions/setup-theos
+
+      - name: Install cyan
+        run: python3 -m pip install --break-system-packages git+https://github.com/asdfzxcvbn/pyzule-rw.git
 
       # pipeline.sh reads the flag table out of the IPA (over a minute) only when the one it finds is
       # for another Spotify version, and rebuilds the Live Activity extension only when its inputs changed.
