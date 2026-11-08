@@ -1,6 +1,10 @@
 name: Build IPA from your own Spotify IPA
 
 on:
+  # Register this manual workflow when its definition changes on main.
+  push:
+    branches: [main]
+    paths: ['.github/workflows/build-ipa.yml']
   workflow_dispatch:
     inputs:
       ipa_url:
@@ -18,6 +22,7 @@ env:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
