@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: "Direct link to a decrypted Spotify IPA"
+        description: "Decrypted Spotify IPA URL (Dropbox share links accepted)"
         required: true
         type: string
       enable_wireguard:
@@ -37,6 +37,7 @@ jobs:
           IPA_URL: ${{ inputs.ipa_url }}
         run: |
           mkdir -p ipa
+          IPA_URL="$(python3 -B scripts/normalize_ipa_url.py)"
           # Keep parallel ranges/resume for hosts that throttle large downloads.
           aria2c --console-log-level=error --summary-interval=0 --download-result=hide \
             --max-connection-per-server=8 --split=8 --min-split-size=1M \

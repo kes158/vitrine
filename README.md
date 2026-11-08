@@ -58,7 +58,8 @@ Fork the repo, enable Actions, run **Build IPA from your own Spotify IPA**. It t
 your decrypted `.ipa` and hands the built IPA back as a workflow artifact. No Mac needed; the link is
 masked in the log and the result stays in your fork.
 
-The URL must return the IPA bytes without login, not a file host's share or preview page.
+Dropbox share links are accepted: the workflow changes `dl=0` to `dl=1` (or adds `dl=1`)
+before downloading. Other hosts must return the IPA bytes without login, not a share or preview page.
 An expired link or download-limit page can return HTTP 200 too. The workflow validates
 the ZIP contents, Spotify bundle identifier and executable before installing build tools;
 a MIME label alone does not determine whether a file is an IPA.
