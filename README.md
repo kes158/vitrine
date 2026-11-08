@@ -159,3 +159,8 @@ the view trees are read through. The ad blocking and the Premium state are porte
 [EeveeSpotify Reincarnated](https://github.com/SideloadLabs/EeveeSpotifyReincarnated).
 
 GPL-3.0. Not affiliated with Spotify.
+
+### Optional in-app WireGuard / proxy
+
+For the verified Spotify 9.1.90 IPA, build with `WIREGUARD=1` (iOS 17+).
+See [setup, coverage and validation](docs/wireguard.md).

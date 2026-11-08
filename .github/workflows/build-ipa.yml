@@ -7,6 +7,10 @@ on:
         description: "Direct link to a decrypted Spotify IPA"
         required: true
         type: string
+      enable_wireguard:
+        description: "App-local WireGuard / proxy (verified Spotify 9.1.90 input, iOS 17+)"
+        type: boolean
+        default: false
       upload_method:
         description: "Where to put the result"
         default: artifacts
@@ -67,7 +71,15 @@ jobs:
           path: out/extension
           key: extension-${{ steps.spotify.outputs.version }}-${{ hashFiles('extension/LiveActivity/**', 'tweak/Sources/Shared/LiveActivity/**', 'scripts/build-extension.sh') }}
 
+      - uses: actions/setup-go@v6
+        if: inputs.enable_wireguard
+        with:
+          go-version-file: WireGuard/go.mod
+          cache-dependency-path: WireGuard/go.sum
+
       - run: make release
+        env:
+          WIREGUARD: ${{ inputs.enable_wireguard && '1' || '0' }}
 
       - run: ccache --show-stats
 

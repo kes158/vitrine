@@ -6,6 +6,8 @@ IPA ?= $(firstword $(wildcard ipa/*.ipa))
 # take --flex; make would read that as an option of its own.)
 FLEX ?= 0
 FLEX_ARG := $(if $(filter 0,$(FLEX)),--no-flex,)
+WIREGUARD ?= 0
+export WIREGUARD
 PIXIE ?= 0
 PIXIE_ARG := $(if $(filter 1,$(PIXIE)),--pixie,)
 

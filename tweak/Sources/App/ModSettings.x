@@ -1,3 +1,6 @@
+#if SG_WIREGUARD
+#import "Shared/WireGuard/SGWGSettingsController.h"
+#endif
 // Settings: a Mod Settings row at the end of Spotify's settings list opens the mod's own page, its rows
 // grouped by what they are as the system Settings app groups its own, in cards with no headings: what the
 // app looks like (Redesigned UI's switch, Appearance, Tab bar), the screens a page of its own changes
@@ -191,6 +194,10 @@ static UIViewController *modSettingsPage(void) {
                 namedFor(@"listeningstats"),
                 SGL(@"settings.search.listening_stats.keywords", @"statistics history top songs streaks charts")),
     ]];
+#if SG_WIREGUARD
+    [features addObject:pageRow(SGL(@"settings.wireguard.title", @"In-app WireGuard / Proxy"), @"network", UIColor.systemTealColor,
+                               ^UIViewController *{ return [SGWGSettingsController new]; })];
+#endif
     [sections addObject:SGSection(nil, features)];
 
     SGModRow *mod = foundBy(pageRow(SGL(@"settings.main.mod.title", @"Mod"), @"info.circle", SGColorRGB(0x7D7D81), ^UIViewController *{ return SGAboutPage(); }),

@@ -1321,10 +1321,11 @@ static void openWhenUp(SGRMenuSession *session, UIViewController *sheet, int tri
         %orig;
         return;
     }
-    %orig(presented, NO, ^{
+    void (^wrappedCompletion)(void) = ^{
         if (completion) completion();
         [session open];
-    });
+    };
+    %orig(presented, NO, wrappedCompletion);
 }
 %end
 

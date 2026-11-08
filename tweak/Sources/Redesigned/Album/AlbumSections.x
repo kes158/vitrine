@@ -315,10 +315,11 @@ static NSMutableSet<NSString *> *sg_loggedMessages;
 #endif
     UICollectionView *list = (UICollectionView *)self;
     SGRAlbumNotesWillChangeSnapshot(list);
-    %orig(updates, ^(BOOL finished) {
+    void (^wrappedCompletion)(BOOL) = ^(BOOL finished) {
         SGRAlbumNotesDidChangeSnapshot(list);
         if (completion) completion(finished);
-    });
+    };
+    %orig(updates, wrappedCompletion);
 }
 %end
 

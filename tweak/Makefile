@@ -25,7 +25,11 @@ TWEAK_NAME := spotifyglass
 # Every source under Sources/, so a new feature needs no Makefile edit. Shared/Flags/SGFlagList.m
 # is generated from the IPA by scripts/extract-flags.py.
 spotifyglass_FILES := $(shell find Sources -name '*.m' -o -name '*.x' -o -name '*.swift' | sort)
-spotifyglass_CFLAGS := -fobjc-arc -ISources -DSG_VERSION=\"$(SG_VERSION)\"
+WIREGUARD ?= 0
+ifneq ($(WIREGUARD),1)
+spotifyglass_FILES := $(filter-out Sources/Shared/WireGuard/%,$(spotifyglass_FILES))
+endif
+spotifyglass_CFLAGS := -DSG_WIREGUARD=$(WIREGUARD) -fobjc-arc -ISources -DSG_VERSION=\"$(SG_VERSION)\"
 # The phone driver (Diagnostics/Driver.m) goes only into builds that carry FLEX: scripts/pipeline.sh sets
 # SG_DRIVER=1 for those, and every other build (make release, the release workflow's .deb) leaves it out.
 SG_DRIVER ?= 0
@@ -44,6 +48,20 @@ SG_AUDIO := ../vendor/audio
 spotifyglass_OBJ_FILES := $(SG_AUDIO)/build/ios/libsgaudio.a
 Sources/Shared/AudioEffects/SGDSPCrossfeed.m_CFLAGS := -isystem $(SG_AUDIO)/libbs2b
 Sources/Shared/AudioEffects/SGDSPLiveprog.m_CFLAGS := -isystem $(SG_AUDIO)/wdl/eel2
+
+ifeq ($(WIREGUARD),1)
+spotifyglass_OBJ_FILES += ../WireGuard/build/libsgwg.a
+spotifyglass_FRAMEWORKS += Network Security CoreFoundation
+spotifyglass_LIBRARIES += resolv
+spotifyglass.all.tweak.variables: sg-wireguard
+.PHONY: sg-wireguard
+sg-wireguard:
+	@../WireGuard/build-ios.sh
+
+after-stage::
+	@mkdir -p "$(THEOS_STAGING_DIR)$(THEOS_PACKAGE_INSTALL_PREFIX)/Library/Application Support/Vitrine.bundle"
+	@cp ../WireGuard/THIRD_PARTY_LICENSES.txt "$(THEOS_STAGING_DIR)$(THEOS_PACKAGE_INSTALL_PREFIX)/Library/Application Support/Vitrine.bundle/WireGuard-THIRD_PARTY_LICENSES.txt"
+endif
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 

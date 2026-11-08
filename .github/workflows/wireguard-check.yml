@@ -1,0 +1,44 @@
+name: WireGuard checks
+on:
+  workflow_dispatch:
+  push:
+    paths: ['WireGuard/**', 'tweak/Sources/Shared/WireGuard/**', 'harness/wireguard/**', 'scripts/spotify-transport-scan.py', 'tweak/Makefile', '.github/workflows/wireguard-check.yml']
+  pull_request:
+    paths: ['WireGuard/**', 'tweak/Sources/Shared/WireGuard/**', 'harness/wireguard/**', 'scripts/spotify-transport-scan.py', 'tweak/Makefile', '.github/workflows/wireguard-check.yml']
+permissions:
+  contents: read
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: WireGuard/go.mod
+          cache-dependency-path: WireGuard/go.sum
+      - run: cd WireGuard && go mod verify && go test -race ./...
+  apple:
+    runs-on: macos-latest
+    env:
+      THEOS: ${{ github.workspace }}/theos
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-theos
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: WireGuard/go.mod
+          cache-dependency-path: WireGuard/go.sum
+      - run: python3 harness/wireguard/run_macos.py --out wireguard-results.json
+      - run: scripts/check-layers.sh && python3 scripts/check-strings.py
+      - run: harness/wireguard/build-settings.sh
+      # Compile-only fixture: the real IPA pipeline extracts its own flag table.
+      # Never ship the tweak produced by this job as an installable release.
+      - name: Compile-only flag table
+        run: |
+          printf '#import "Flags.h"\nconst SGFlagDef SGFlagTable[] = {{"fixture", SGFlagBool, 0, 0, 0}};\nconst NSUInteger SGFlagCount = 0;\n' > tweak/Sources/Shared/Flags/SGFlagList.m
+      - name: Compile iOS tweak with WireGuard
+        run: gmake -C tweak package WIREGUARD=1
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wireguard-checks
+          path: wireguard-results.json

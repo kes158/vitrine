@@ -29,3 +29,6 @@ notes/
 .claude/worktrees/
 NativeDownloads/build/
 NativeDownloads/outputs/
+
+WireGuard/build/
+*.ipa
