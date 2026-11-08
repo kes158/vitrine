@@ -229,6 +229,24 @@ static id CreateProxyConfig(void) {
     return proxy;
 }
 
+id SGWGCreateNativeProxyConfig(void) {
+    id proxy = gActive ? CreateProxyConfig() : nil;
+    if (proxy) pSetFailover((__bridge void *)proxy, false);
+    return proxy;
+}
+
+BOOL SGWGNativeSOCKSEndpoint(int *port, const char **user, const char **password) {
+    if (!gActive || gBlockAll) return NO;
+    if ([gKind isEqualToString:SGWGKindWireGuard]) {
+        if (port) *port = gPort;
+        if (user) *user = gUser;
+        if (password) *password = gPass;
+        return YES;
+    }
+    // Native socket forwarding is currently limited to the in-app SOCKS listener.
+    return NO;
+}
+
 static void ApplyProxy(NSURLSessionConfiguration *config) {
     if (!gActive || ![config isKindOfClass:NSURLSessionConfiguration.class]) return;
     NSArray *classes = config.protocolClasses ?: @[];
@@ -700,6 +718,7 @@ static void StartExternalProxy(void) {
     atomic_store(&gState, gBlockAll ? SGWGStateBlocked : SGWGStateExternalProxy);
     InstallSessionHooks();
     SGWGInstallTransportPatches();
+    SGWGInstallNativePatches();
 }
 
 __attribute__((constructor)) static void SGWGInit(void) {
@@ -725,6 +744,7 @@ __attribute__((constructor)) static void SGWGInit(void) {
         atomic_store(&gState, SGWGStateStarting);
         InstallSessionHooks();
         SGWGInstallTransportPatches();
+        SGWGInstallNativePatches();
         ObserveLifecycle();
         StartEngine();
     }
@@ -795,6 +815,7 @@ NSString *SGWGDiagnosticsReport(NSDictionary<NSString *, NSString *> *checks) {
     [lines addObject:[NSString stringWithFormat:@"proxy.other: http3 requests cleared %@ | NSData URL loads tunnelled %@ | rebinds %@",
         p[@"http3Cleared"], p[@"dataURLFetches"], p[@"rebinds"]]];
     [lines addObjectsFromArray:SGWGTransportReportLines()];
+    [lines addObjectsFromArray:SGWGNativeReportLines()];
     for (NSString *key in [checks.allKeys sortedArrayUsingSelector:@selector(compare:)])
         [lines addObject:[NSString stringWithFormat:@"check.%@: %@", key, checks[key]]];
     [lines addObject:@"note: a country/HTTPS check passing does not prove music playback; verify play, next track and lock-screen playback."];

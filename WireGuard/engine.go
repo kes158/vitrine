@@ -563,6 +563,14 @@ func (e *Engine) Lookup(host string, timeout time.Duration) (int, time.Duration,
 	return len(addrs), time.Since(start), err
 }
 
+// Resolve is for Spotify's BSD getaddrinfo import. It uses only the tunnel DNS
+// resolver; callers pass the resulting numeric addresses to libc without DNS.
+func (e *Engine) Resolve(host string, timeout time.Duration) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return e.stack.LookupContextHost(ctx, host)
+}
+
 // Status reports counters and handshake state. It never includes keys,
 // endpoint addresses, hostnames or URLs: IpcGet output is parsed for a fixed
 // set of numeric fields only, because it also contains private_key.

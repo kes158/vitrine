@@ -10,10 +10,19 @@
 // The Spotify classes below are fixtures; they test observer forwarding and ABI guards only.
 
 #import <Foundation/Foundation.h>
+#import <arpa/inet.h>
 #import <Network/Network.h>
 #import <dlfcn.h>
+#import <netdb.h>
+#import <fcntl.h>
+#import <sys/socket.h>
 #import <objc/runtime.h>
 #import "../../tweak/Sources/Shared/WireGuard/SGWGCore.h"
+
+int SGWGNativeTestGetaddrinfo(const char *, const char *, const struct addrinfo *, struct addrinfo **);
+int SGWGNativeTestConnect(int, const struct sockaddr *, socklen_t);
+ssize_t SGWGNativeTestSendto(int, const void *, size_t, int, const struct sockaddr *, socklen_t);
+nw_connection_t SGWGNativeTestNWCreate(nw_endpoint_t, nw_parameters_t);
 
 #define CHECK(cond, ...)                                                    \
     do {                                                                    \
@@ -178,6 +187,76 @@ static void UnitChecks(void) {
 
 static void NetworkChecks(void) {
     WaitForEngine();
+    struct addrinfo hints = {.ai_family = AF_INET, .ai_socktype = SOCK_STREAM};
+    struct addrinfo *resolved = NULL;
+    CHECK(SGWGNativeTestGetaddrinfo("fixture.test", "80", &hints, &resolved) == 0 && resolved,
+          "native getaddrinfo did not use tunnel DNS");
+    int nativeFD = socket(resolved->ai_family, resolved->ai_socktype, resolved->ai_protocol);
+    CHECK(nativeFD >= 0 && SGWGNativeTestConnect(nativeFD, resolved->ai_addr, resolved->ai_addrlen) == 0,
+          "native TCP did not connect through SOCKS: %d", errno);
+    freeaddrinfo(resolved);
+    const char *request = "GET / HTTP/1.1\r\nHost: fixture.test\r\nConnection: close\r\n\r\n";
+    CHECK(send(nativeFD, request, strlen(request), 0) == (ssize_t)strlen(request), "native TCP write failed");
+    char response[512] = {0};
+    ssize_t count = recv(nativeFD, response, sizeof(response) - 1, 0);
+    close(nativeFD);
+    CHECK(count > 0 && strstr(response, "200 OK"), "native TCP did not reach tunnel origin");
+    puts("PASS Spotify-style native getaddrinfo + connect -> SOCKS5 -> WireGuard origin");
+
+    nw_parameters_t tcp = nw_parameters_create_secure_tcp(NW_PARAMETERS_DISABLE_PROTOCOL, NW_PARAMETERS_DEFAULT_CONFIGURATION);
+    nw_endpoint_t endpoint = nw_endpoint_create_host("fixture.test", "80");
+    nw_connection_t nw = SGWGNativeTestNWCreate(endpoint, tcp);
+    dispatch_semaphore_t nwDone = dispatch_semaphore_create(0);
+    __block BOOL nwOK = NO;
+    nw_connection_set_queue(nw, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+    nw_connection_set_state_changed_handler(nw, ^(nw_connection_state_t state, nw_error_t error) {
+        if (state == nw_connection_state_failed) dispatch_semaphore_signal(nwDone);
+        if (state != nw_connection_state_ready) return;
+        dispatch_data_t data = dispatch_data_create(request, strlen(request), NULL, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+        nw_connection_send(nw, data, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, true, ^(nw_error_t sendError) {
+            if (sendError) { dispatch_semaphore_signal(nwDone); return; }
+            nw_connection_receive(nw, 1, 512, ^(dispatch_data_t content, nw_content_context_t context,
+                                                   bool complete, nw_error_t receiveError) {
+                const void *mapped = NULL;
+                size_t mappedSize = 0;
+                dispatch_data_t map = content ? dispatch_data_create_map(content, &mapped, &mappedSize) : nil;
+                nwOK = !receiveError && mappedSize >= 12 && memmem(mapped, mappedSize, "200 OK", 6);
+                (void)map;
+                dispatch_semaphore_signal(nwDone);
+            });
+        });
+    });
+    nw_connection_start(nw);
+    CHECK(dispatch_semaphore_wait(nwDone, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)) == 0 && nwOK,
+          "native Network.framework TCP did not reach tunnel origin");
+    nw_connection_cancel(nw);
+    puts("PASS Spotify-style nw_connection_create -> proxy context -> WireGuard origin");
+
+    struct addrinfo *blockingAddress = NULL;
+    CHECK(SGWGNativeTestGetaddrinfo("fixture.test", "80", &hints, &blockingAddress) == 0 && blockingAddress,
+          "nonblocking fixture DNS failed");
+    int nonblockingFD = socket(AF_INET, SOCK_STREAM, 0);
+    CHECK(nonblockingFD >= 0 && fcntl(nonblockingFD, F_SETFL, O_NONBLOCK) == 0, "nonblocking socket setup failed");
+    CHECK(SGWGNativeTestConnect(nonblockingFD, blockingAddress->ai_addr, blockingAddress->ai_addrlen) == 0,
+          "nonblocking native TCP did not connect through tunnel: %d", errno);
+    CHECK(fcntl(nonblockingFD, F_GETFL) & O_NONBLOCK, "nonblocking flag was not restored");
+    close(nonblockingFD);
+    freeaddrinfo(blockingAddress);
+    puts("PASS native nonblocking TCP proxied and original socket flag restored");
+
+    int udpFD = socket(AF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_in remote = {.sin_len = sizeof(remote), .sin_family = AF_INET,
+        .sin_port = htons(443)};
+    inet_pton(AF_INET, "203.0.113.2", &remote.sin_addr);
+    CHECK(udpFD >= 0 && SGWGNativeTestSendto(udpFD, "x", 1, 0,
+          (const struct sockaddr *)&remote, sizeof(remote)) == -1 && errno == ENETUNREACH,
+          "remote native UDP was not blocked");
+    remote.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    remote.sin_port = htons(5353);
+    CHECK(SGWGNativeTestSendto(udpFD, "x", 1, 0,
+          (const struct sockaddr *)&remote, sizeof(remote)) == 1, "local mDNS was blocked");
+    close(udpFD);
+    puts("PASS remote native UDP blocked; loopback mDNS left local");
     FixtureTrust *trust = [FixtureTrust new];
     NSURLSession *delegateSession = [NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.ephemeralSessionConfiguration
                                                                   delegate:trust delegateQueue:nil];

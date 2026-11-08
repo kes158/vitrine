@@ -17,6 +17,7 @@ REQUIRED = {
     "Frameworks/SpotifyShared.framework/SpotifyShared": ["SPTDataLoaderService"],
 }
 SELECTORS = ["URLSession:task:didCompleteWithError:", "URLSession:dataTask:didReceiveData:"]
+NATIVE_IMPORTS = ["nw_connection_create", "connect", "getaddrinfo", "sendto", "sendmsg"]
 
 
 def macho(data):
@@ -63,8 +64,17 @@ def scan(path, require_version=None):
                 if not all(methods.values()):
                     raise ValueError(f"Required transport selectors missing: {cls}")
                 record["classes"][cls] = methods
+            if name == "Spotify":
+                imported = subprocess.run(["xcrun", "dyld_info", "-imports", str(binary)],
+                                          check=True, capture_output=True, text=True).stdout
+                record["native_imports"] = {
+                    symbol: bool(re.search(r"\s_" + re.escape(symbol) + r"\s+\(from ", imported))
+                    for symbol in NATIVE_IMPORTS
+                }
+                if require_version == "9.1.90" and not all(record["native_imports"].values()):
+                    raise ValueError("Required native transport import missing from inspected Spotify 9.1.90")
             result["images"][name] = record
-        result["evidence"] = "Static class/selector presence only; runtime ABI and device playback must also be checked."
+        result["evidence"] = "Static class/selector/import presence only; runtime ABI and device playback must also be checked."
         return result
 
 

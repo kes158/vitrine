@@ -12,6 +12,7 @@ int SGWGStart(char *text, char *user, char *pass, int listenerFD, int port);
 char *SGWGStatus(void);
 int SGWGRebind(void);
 char *SGWGLookup(char *host);
+char *SGWGResolve(char *host);
 char *SGWGRedact(char *text);
 void SGWGFree(char *p);
 

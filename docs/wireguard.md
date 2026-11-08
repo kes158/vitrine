@@ -5,7 +5,10 @@
 
 ## 적용 범위
 
-Spotify의 `NSURLSession` 설정과 세션 생성에 프록시를 적용합니다.
+Spotify의 `NSURLSession` 설정과 세션 생성에 프록시를 적용합니다. 9.1.90 메인 실행파일의
+`nw_connection_create`, `getaddrinfo`, `connect`, `sendto`, `sendmsg` import도 실행파일 범위에서 교체합니다.
+`Network.framework` TCP에는 전용 privacy context의 프록시를 설정하고, BSD TCP의 이름 조회는 터널 DNS,
+연결은 로컬 인증 SOCKS5를 거칩니다. Go 엔진과 시스템 프레임워크의 소켓은 교체하지 않습니다.
 
 ```text
 Spotify URLSession → 인증된 127.0.0.1 SOCKS5 → gVisor TCP/IP → wireguard-go → 사용자의 WireGuard 서버
@@ -16,9 +19,14 @@ HTTPS 프록시는 시스템 신뢰 저장소로 인증서를 검증합니다. T
 
 시스템 VPN, Network Extension, TUN, 라우팅 테이블을 사용하지 않습니다.
 프록시가 적용된 요청은 터널/서버가 실패해도 직접 연결로 전환하지 않습니다.
-**앱 전체의 모든 소켓을 차단하는 VPN이나 킬 스위치는 아닙니다.** 네이티브 소켓,
-별도 프로세스의 AVURLAsset·웹 로그인·백그라운드 전송, WebSocket의 로컬 주소 예외, 다른 Spotify Connect 기기의 재생은
-보장 범위 밖입니다. 이 경로가 직접 통신하는지 실기기에서 별도로 측정해야 합니다.
+**앱 전체의 모든 소켓을 차단하는 VPN이나 킬 스위치는 아닙니다.** 메인 실행파일의 위 import를 거치지 않는
+네트워크 경로, 별도 프로세스의 AVURLAsset·웹 로그인·백그라운드 전송, WebSocket의 로컬 주소 예외,
+다른 Spotify Connect 기기의 재생은 보장 범위 밖입니다. 실기기에서 각 경로를 별도로 측정해야 합니다.
+메인 실행파일의 원격 UDP/QUIC는 현재 WireGuard 엔진에 UDP 릴레이가 없어 직접 전송을 차단합니다.
+로컬 루프백·링크 로컬·멀티캐스트는 Connect 검색을 위해 로컬 경로에 남습니다.
+BSD `connect`의 논블로킹 소켓도 SOCKS 연결을 완료할 때까지 호출 스레드에서 기다린 후 원래 플래그를 복원하므로,
+실기기에서 지연과 재생 상태를 확인해야 합니다. 외부 프록시 모드의 BSD TCP는 현재 연결을 차단하며,
+`Network.framework` TCP와 `NSURLSession`은 설정된 외부 프록시를 사용합니다.
 
 CFNetwork의 로컬 주소 예외가 HTTP 요청을 직접 보내는 것을 막기 위해 숫자 IP URL과
 `localhost`/`.local` 호스트의 HTTP(S) 요청은 차단합니다. Spotify의 호스트 이름 URL을 사용해야 합니다.
@@ -90,6 +98,7 @@ python3 scripts/check-strings.py
 
 - Go: 프로필 파서, 인증 SOCKS5/CONNECT, 실제 루프백 WireGuard 피어, DNS·HTTPS·206, 재연결, 정보 마스킹.
 - macOS: 실제 Foundation/Network.framework로 터널과 외부 프록시를 통과하는 요청, 직접 연결로의 전환 차단,
+  테스트 피어로의 네이티브 `getaddrinfo`·`connect`·`nw_connection_create` TCP 연결,
   죽은 피어·잘못된 설정·잘못된 비밀번호·신뢰할 수 없는 인증서 처리. Spotify delegate fixture의 전달과 ABI 검사.
 - UIKit fixture: 실제 설정 화면/번역과 가짜 엔진 상태로 연결 종류 전환·비밀번호 보안 입력·다크 스타일 확인.
 - iOS arm64: 실제 9.1.90에서 추출한 플래그 테이블로 전체 트윅 빌드.

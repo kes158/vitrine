@@ -73,6 +73,13 @@ void SGWGInstallTransportPatches(void);
 NSArray<NSString *> *SGWGTransportReportLines(void);
 NSArray<NSString *> *SGWGScanTransportClasses(void);
 
+// Native Network.framework and BSD socket paths imported by Spotify's image.
+void SGWGInstallNativePatches(void);
+NSArray<NSString *> *SGWGNativeReportLines(void);
+id _Nullable SGWGCreateNativeProxyConfig(void);
+BOOL SGWGNativeSOCKSEndpoint(int * _Nullable port, const char * _Nullable * _Nullable user,
+                             const char * _Nullable * _Nullable password);
+
 // Implemented in SGWGCore.m; used by SGWGTransport.m.
 NSString *SGWGAppVersion(void);
 NSString *SGWGHostCategory(NSString *_Nullable host);

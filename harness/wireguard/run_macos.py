@@ -250,7 +250,9 @@ def main():
         sh(["go", "build", "-buildmode=c-archive", "-o", str(tmp / "libsgwg-macos.a"), "."], cwd=WG, env=env)
         harness = tmp / "harness"
         sh(["xcrun", "clang", "-fobjc-arc", "-fmodules", "-DSGWG_TESTING", "-mmacosx-version-min=14.0", "-Wall",
+            "-I", str(ROOT / "tweak/Sources"),
             str(ROOT / "tweak/Sources/Shared/WireGuard/SGWGCore.m"), str(ROOT / "tweak/Sources/Shared/WireGuard/SGWGTransport.m"),
+            str(ROOT / "tweak/Sources/Shared/WireGuard/SGWGNative.m"),
             str(ROOT / "harness/wireguard/harness.m"), str(tmp / "libsgwg-macos.a"),
             "-framework", "Foundation", "-framework", "Network", "-framework", "Security",
             "-framework", "CoreFoundation", "-lresolv", "-o", str(harness)])

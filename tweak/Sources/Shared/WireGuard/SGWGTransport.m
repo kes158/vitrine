@@ -102,7 +102,7 @@ NSArray<NSString *> *SGWGTransportReportLines(void) {
         [NSString stringWithFormat:@"spotify.errors: %@", Summary(errors)],
         [NSString stringWithFormat:@"spotify.received-bytes: media %llu api %llu", (unsigned long long)mediaBytes, (unsigned long long)apiBytes],
         [NSString stringWithFormat:@"spotify.hooks: %lu installed | skipped: %@", (unsigned long)installed.count, [skipped componentsJoinedByString:@"; "] ?: @"none"],
-        @"coverage: URLSession only; native sockets, remote AVURLAsset, web sign-in, background service transfers and remote Connect devices are not guaranteed.",
+        @"coverage: URLSession and Spotify main-image native TCP imports; remote UDP is blocked. Background services, remote Connect devices and playback are not device-verified.",
         @"baseline: Spotify 9.1.90; class/selector existence is static evidence, not proof of playback. Destination counters count connection attempts."
     ];
     os_unfair_lock_unlock(&lock);

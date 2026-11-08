@@ -143,6 +143,28 @@ func SGWGLookup(host *C.char) *C.char {
 	return cString(out)
 }
 
+//export SGWGResolve
+func SGWGResolve(host *C.char) *C.char {
+	bridgeMu.Lock()
+	e := current
+	bridgeMu.Unlock()
+	if e == nil {
+		return cString(map[string]any{"ok": false})
+	}
+	name := strings.TrimSpace(C.GoString(host))
+	if !isHostname(name) {
+		return cString(map[string]any{"ok": false})
+	}
+	addresses, err := e.Resolve(name, 8*time.Second)
+	if err != nil || len(addresses) == 0 {
+		return cString(map[string]any{"ok": false})
+	}
+	if len(addresses) > 16 {
+		addresses = addresses[:16]
+	}
+	return cString(map[string]any{"ok": true, "addresses": addresses})
+}
+
 //export SGWGRedact
 func SGWGRedact(text *C.char) *C.char {
 	return C.CString(Redact(C.GoString(text)))
