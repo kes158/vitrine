@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.32](https://github.com/kes158/vitrine/compare/v1.0.0-beta.31...v1.0.0-beta.32) (2026-11-15)
+
+
+### Features
+
+* add opt-in Pixie 1.4 IPA build ([33c935e](https://github.com/kes158/vitrine/commit/33c935e8767d554550619a4da8400d9b47cd5434))
+
 ## [1.0.0-beta.31](https://github.com/kes158/vitrine/compare/v1.0.0-beta.30...v1.0.0-beta.31) (2026-11-14)
 
 
