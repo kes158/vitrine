@@ -1,0 +1,106 @@
+diff --git a/NativeDownloads/src/Diagnostics/TracePlatform.m b/NativeDownloads/src/Diagnostics/TracePlatform.m
+index d1aeaf2..67e5a33 100644
+--- a/NativeDownloads/src/Diagnostics/TracePlatform.m
++++ b/NativeDownloads/src/Diagnostics/TracePlatform.m
+@@ -90,10 +90,12 @@ void SAPTracePlatformSetActive(bool enabled) {
+         for(NSNotificationName name in @[UIApplicationDidFinishLaunchingNotification,UIApplicationDidBecomeActiveNotification,UIApplicationWillResignActiveNotification,
+              UIApplicationDidEnterBackgroundNotification,UIApplicationWillEnterForegroundNotification,UIApplicationWillTerminateNotification,
+              UIApplicationProtectedDataWillBecomeUnavailable,UIApplicationProtectedDataDidBecomeAvailable,AVAudioSessionRouteChangeNotification,AVAudioSessionInterruptionNotification,NSProcessInfoPowerStateDidChangeNotification]) {
+-            id token=[NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
++            id token=[NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note){
++                dispatch_async(dispatch_get_main_queue(), ^{
+                 if(expected!=atomic_load(&platformGeneration)||!SAPTraceIsActive())return;
+                 SAP_TRACE("lifecycle","notification",0,@{@"name":note.name,@"application_state":@(UIApplication.sharedApplication.applicationState),@"route":route(),
+                     @"route_change_reason":note.userInfo[AVAudioSessionRouteChangeReasonKey]?:NSNull.null,@"interruption_type":note.userInfo[AVAudioSessionInterruptionTypeKey]?:NSNull.null});
++                });
+             }];[observers addObject:token];
+         }
+         monitor=nw_path_monitor_create();nw_path_monitor_set_queue(monitor,dispatch_get_global_queue(QOS_CLASS_UTILITY,0));
+diff --git a/NativeDownloads/src/Export/NativeShareHooks.m b/NativeDownloads/src/Export/NativeShareHooks.m
+index ff2c536..08058b4 100644
+--- a/NativeDownloads/src/Export/NativeShareHooks.m
++++ b/NativeDownloads/src/Export/NativeShareHooks.m
+@@ -309,7 +309,7 @@ - (BOOL)canBePreventedByGestureRecognizer:(UIGestureRecognizer *)other {return s
+     state.row=[[UIStackView alloc]initWithArrangedSubviews:@[heading,progress]];state.row.axis=UILayoutConstraintAxisVertical;state.row.spacing=8;state.row.layoutMarginsRelativeArrangement=YES;state.row.layoutMargins=UIEdgeInsetsMake(12,16,12,16);
+     [state.stack addArrangedSubview:state.row];objc_setAssociatedObject(controller,&SAPNativeShareStateKey,state,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+     __weak SAPNativeShareState *weak=state;
+-    state.defaultsObserver=[NSNotificationCenter.defaultCenter addObserverForName:NSUserDefaultsDidChangeNotification object:NSUserDefaults.standardUserDefaults queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n){SAPNativeShareState *s=weak;if(s&&!s.suspended&&s.lastPreference!=[NSUserDefaults.standardUserDefaults boolForKey:SAPNativeSharePreference])[s apply];}];
++    state.defaultsObserver=[NSNotificationCenter.defaultCenter addObserverForName:NSUserDefaultsDidChangeNotification object:NSUserDefaults.standardUserDefaults queue:nil usingBlock:^(NSNotification *n){dispatch_async(dispatch_get_main_queue(),^{SAPNativeShareState *s=weak;if(s&&!s.suspended&&s.lastPreference!=[NSUserDefaults.standardUserDefaults boolForKey:SAPNativeSharePreference])[s apply];});}];
+     [state apply];return state;
+ }
+ static void SAPNativeShareReplace(Class cls,SEL selector,IMP replacement){Method m=class_getInstanceMethod(cls,selector);if(!m)return;if(!class_addMethod(cls,selector,replacement,method_getTypeEncoding(m)))class_replaceMethod(cls,selector,replacement,method_getTypeEncoding(m));}
+diff --git a/NativeDownloads/src/Runtime/PixieBootstrap.m b/NativeDownloads/src/Runtime/PixieBootstrap.m
+index e4eaf17..c8e44da 100644
+--- a/NativeDownloads/src/Runtime/PixieBootstrap.m
++++ b/NativeDownloads/src/Runtime/PixieBootstrap.m
+@@ -55,6 +55,6 @@
+         }
+         SAP_TRACE("startup","pixie_hooks_installed",0,@{@"offline_flags":SAPOfflineFlagsReport(),@"offline_config":SAPOfflineConfigReport(),@"native_offline":SAPNativeOfflineReport(),@"transport":SAPTrackDownloadReport(),@"hooks":SAPTraceHookManifest()});
+         dispatch_async(dispatch_get_main_queue(), ^{ SAPInstallDownloadSettings();SAPInstallNativeShareHooks(); });
+-        [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidFinishLaunchingNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){SAPInstallDownloadSettings();}];
++        [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidFinishLaunchingNotification object:nil queue:nil usingBlock:^(NSNotification *note){dispatch_async(dispatch_get_main_queue(),^{SAPInstallDownloadSettings();});}];
+     }
+ }
+diff --git a/NativeDownloads/src/Spotify/NativeOfflineAdapter.m b/NativeDownloads/src/Spotify/NativeOfflineAdapter.m
+index 7056e38..5c1da33 100644
+--- a/NativeDownloads/src/Spotify/NativeOfflineAdapter.m
++++ b/NativeDownloads/src/Spotify/NativeOfflineAdapter.m
+@@ -393,8 +393,8 @@ void SAPInstallNativeOffline(void) {
+         // refresh) and lower it again; these two cheap, bounded re-checks catch that instead
+         // of leaving the raise as a one-shot applied only at launch.
+         dispatch_async(dispatch_get_main_queue(),^{
+-            [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+-                requestQuotaRaise(@"foreground");
++            [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
++                dispatch_async(dispatch_get_main_queue(), ^{ requestQuotaRaise(@"foreground"); });
+             }];
+         });
+         // Sampling is read-only, every 30 seconds while a journal session is active.
+diff --git a/NativeDownloads/src/UI/ArtistDownloadsUI.m b/NativeDownloads/src/UI/ArtistDownloadsUI.m
+index 5715bcc..d2fd704 100644
+--- a/NativeDownloads/src/UI/ArtistDownloadsUI.m
++++ b/NativeDownloads/src/UI/ArtistDownloadsUI.m
+@@ -91,7 +91,7 @@ - (void)viewDidLoad {
+     UIBarButtonItem *back=[[UIBarButtonItem alloc]initWithImage:[UIImage systemImageNamed:@"xmark"] style:UIBarButtonItemStylePlain target:self action:@selector(close)];
+     back.tintColor=UIColor.whiteColor;back.accessibilityLabel=@"Back";self.navigationItem.leftBarButtonItem=back;
+     __weak typeof(self) weak=self;
+-    self.foregroundObserver=[NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note){typeof(self) page=weak;if(page.itemsVisible && page.viewIfLoaded.window){[page detachItems];[page attachItems];if(page.sessionObservation)[page.sessionObservation refresh];else[page bindSession];}}];
++    self.foregroundObserver=[NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(__unused NSNotification *note){dispatch_async(dispatch_get_main_queue(),^{typeof(self) page=weak;if(page.itemsVisible && page.viewIfLoaded.window){[page detachItems];[page attachItems];if(page.sessionObservation)[page.sessionObservation refresh];else[page bindSession];}});}];
+     [self loadCatalog];
+ }
+ - (NSArray *)sections {return self.catalog[@"sections"]?:@[];}
+diff --git a/NativeDownloads/src/UI/PixieManagerSettings.m b/NativeDownloads/src/UI/PixieManagerSettings.m
+index 2df40a8..2609c07 100644
+--- a/NativeDownloads/src/UI/PixieManagerSettings.m
++++ b/NativeDownloads/src/UI/PixieManagerSettings.m
+@@ -166,7 +166,7 @@ - (void)updateBottomInset {
+ - (void)viewWillAppear:(BOOL)animated {
+     [super viewWillAppear:animated];[self refresh];
+     __weak typeof(self) weak=self;
+-    self.changeObserver=[NSNotificationCenter.defaultCenter addObserverForName:SAPUIChanged object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){[weak refresh];}];
++    self.changeObserver=[NSNotificationCenter.defaultCenter addObserverForName:SAPUIChanged object:nil queue:nil usingBlock:^(NSNotification *note){dispatch_async(dispatch_get_main_queue(),^{[weak refresh];});}];
+ }
+ - (void)viewWillDisappear:(BOOL)animated {
+     [super viewWillDisappear:animated];if(self.changeObserver)[NSNotificationCenter.defaultCenter removeObserver:self.changeObserver];self.changeObserver=nil;
+@@ -389,7 +389,7 @@ - (void)viewDidLoad {
+     [super viewDidLoad];self.title=SAPL(@"Менеджер загрузок Pixie",@"Pixie Download Manager");
+     [self updateQualityOffer];
+     __weak typeof(self) weak=self;
+-    self.qualityObserver=[NSNotificationCenter.defaultCenter addObserverForName:SAPNativeDownloadQualityOfferDidChangeNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note){[weak updateQualityOffer];}];
++    self.qualityObserver=[NSNotificationCenter.defaultCenter addObserverForName:SAPNativeDownloadQualityOfferDidChangeNotification object:nil queue:nil usingBlock:^(__unused NSNotification *note){dispatch_async(dispatch_get_main_queue(),^{[weak updateQualityOffer];});}];
+ }
+ - (void)dealloc {if(_qualityObserver)[NSNotificationCenter.defaultCenter removeObserver:_qualityObserver];}
+ - (void)updateQualityOffer {
+diff --git a/NativeDownloads/tools/build_vitrine_9190.py b/NativeDownloads/tools/build_vitrine_9190.py
+index b24af5c..b21529a 100644
+--- a/NativeDownloads/tools/build_vitrine_9190.py
++++ b/NativeDownloads/tools/build_vitrine_9190.py
+@@ -98,7 +98,7 @@ def main():
+             "-isysroot", sdk, "-fobjc-arc", "-std=gnu11", "-O2", "-fvisibility=hidden",
+             "-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-nullability-completeness",
+             "-Werror=implicit-function-declaration", "-DSAP_RESEARCH_DUMP=0", *("-I" + str(path) for path in include_directories()),
+-            *companion_sources(), "-lm", "-lsqlite3", *swift["link_args"],
++            *companion_sources(), "-lm", "-lsqlite3", "-lz", *swift["link_args"],
+             "-framework", "AudioToolbox", "-framework", "Foundation", "-framework", "UIKit",
+             "-framework", "AVFAudio", "-framework", "CoreGraphics", "-framework", "AVFoundation",
+             "-framework", "CoreMedia", "-framework", "Network", "-framework", "ImageIO", "-framework", "QuartzCore", "-framework", "LinkPresentation", "-framework", "Security", "-framework", "MessageUI", "-framework", "UniformTypeIdentifiers", "-Wl,-install_name,@rpath/SpotifyAudioProbe.dylib", "-o", companion)

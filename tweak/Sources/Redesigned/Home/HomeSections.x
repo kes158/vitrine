@@ -60,14 +60,18 @@ static UICollectionViewCompositionalLayoutSectionProvider withoutDroppedInsets(U
                           configuration:(UICollectionViewCompositionalLayoutConfiguration *)configuration {
     if (!provider) return %orig;
     __block __weak UICollectionViewCompositionalLayout *made = nil;
-    UICollectionViewCompositionalLayout *layout = %orig(withoutDroppedInsets(provider, ^{ return made; }), configuration);
+    UICollectionViewCompositionalLayout *(^owner)(void) = ^{ return made; };
+    UICollectionViewCompositionalLayoutSectionProvider wrappedProvider = withoutDroppedInsets(provider, owner);
+    UICollectionViewCompositionalLayout *layout = %orig(wrappedProvider, configuration);
     made = layout;
     return layout;
 }
 - (instancetype)initWithSectionProvider:(UICollectionViewCompositionalLayoutSectionProvider)provider {
     if (!provider) return %orig;
     __block __weak UICollectionViewCompositionalLayout *made = nil;
-    UICollectionViewCompositionalLayout *layout = %orig(withoutDroppedInsets(provider, ^{ return made; }));
+    UICollectionViewCompositionalLayout *(^owner)(void) = ^{ return made; };
+    UICollectionViewCompositionalLayoutSectionProvider wrappedProvider = withoutDroppedInsets(provider, owner);
+    UICollectionViewCompositionalLayout *layout = %orig(wrappedProvider);
     made = layout;
     return layout;
 }

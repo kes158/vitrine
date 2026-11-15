@@ -20,6 +20,10 @@ on:
         description: "Include opt-in app-local WireGuard / proxy (inspected Spotify IPA only)"
         type: boolean
         default: false
+      enable_pixie:
+        description: "Include Pixie Manager 1.4 (Spotify 9.1.90 only)"
+        type: boolean
+        default: false
       bundle_id:
         description: "Bundle ID must match the signing App ID; extension IDs follow it (empty keeps Spotify's ID)"
         default: ""
@@ -93,6 +97,16 @@ jobs:
         id: spotify
         run: python3 -B scripts/validate-ipa.py ipa/spotify.ipa --github-output "$GITHUB_OUTPUT"
 
+      - name: Check Pixie version
+        if: inputs.enable_pixie
+        env:
+          SPOTIFY_VERSION: ${{ steps.spotify.outputs.version }}
+        run: |
+          if [ "$SPOTIFY_VERSION" != "9.1.90" ]; then
+            echo "::error::Pixie 1.4 requires Spotify 9.1.90; received $SPOTIFY_VERSION"
+            exit 1
+          fi
+
       # pipeline.sh reads the flag table out of the IPA (over a minute) only when the one it finds is
       # for another Spotify version, and rebuilds the Live Activity extension only when its inputs changed.
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
@@ -152,12 +166,34 @@ jobs:
               print(f"{ipa}: no app extensions")
           PY
 
+      - name: Fetch Pixie 1.4 sources
+        if: inputs.enable_pixie
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: kes158/Vitrine-Pixie
+          ref: 2632bdf9081665b9fd78e71cea2878edc6aae73c
+          path: pixie-source
+          persist-credentials: false
+
+      - name: Port Pixie 1.4 to current Vitrine IPA
+        if: inputs.enable_pixie
+        run: |
+          git -C pixie-source apply --check "$GITHUB_WORKSPACE/patches/pixie-1.4-current-vitrine.patch"
+          git -C pixie-source apply "$GITHUB_WORKSPACE/patches/pixie-1.4-current-vitrine.patch"
+          mod_version="$(cat version.txt)"
+          base="out/vitrine-${mod_version}.ipa"
+          result="out/vitrine-${mod_version}-pixie-1.4.ipa"
+          test -s "$base"
+          python3 -B pixie-source/NativeDownloads/tools/build_vitrine_9190.py "$base" --output "$result"
+          unzip -tq "$result" >/dev/null
+          rm "$base"
+
       - run: ccache --show-stats
 
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: inputs.upload_method != 'filebin'
         with:
-          name: vitrine.ipa
+          name: ${{ inputs.enable_pixie && 'vitrine-pixie-1.4.ipa' || 'vitrine.ipa' }}
           path: out/*.ipa
           if-no-files-found: error
 
