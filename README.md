@@ -57,6 +57,17 @@ Fork the repo, enable Actions, run **Build IPA from your own Spotify IPA**. It t
 your decrypted `.ipa` and hands the built IPA back as a workflow artifact. No Mac needed; the link is
 masked in the log and the result stays in your fork.
 
+For Spotify **9.1.90**, select **Include Pixie Manager 1.4** in the manual IPA
+workflow to add Pixie downloads and audio export. This checkbox is off by default
+and can be combined with the WireGuard checkbox. The workflow takes Pixie 1.4 from
+[kes158/Vitrine-Pixie](https://github.com/kes158/Vitrine-Pixie/tree/2632bdf9081665b9fd78e71cea2878edc6aae73c)
+at a pinned commit and applies [`patches/pixie-1.4-current-vitrine.patch`](patches/pixie-1.4-current-vitrine.patch)
+for the missing zlib link and safe notification dispatch. It builds current Vitrine
+first, then adds Pixie and verifies the resulting IPA. Other Spotify versions fail
+before compilation; the Pixie builder also checks the executable UUID and patch sites.
+The local `PIXIE=1` command below still uses the separately bundled earlier Pixie
+source. IPA build success verifies packaging, not playback or export on a device.
+
 ### Build on a Mac
 
 Theos in `~/theos` and Xcode with an iPhoneOS 26+ SDK (`xcode-select` it). An SDK in `~/theos/sdks`
